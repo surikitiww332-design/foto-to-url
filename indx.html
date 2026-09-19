@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gambar ke CDN URL</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a; color: #e2e8f0;
+    min-height: 100vh; display: flex; justify-content: center;
+    padding: 40px 20px;
+  }
+  .container { width: 100%; max-width: 640px; }
+  h1 { font-size: 1.6rem; margin-bottom: 8px; }
+  .subtitle { color: #94a3b8; font-size: 0.9rem; margin-bottom: 28px; }
+
+  /* Area konfigurasi */
+  .config {
+    background: #1e293b; border-radius: 12px;
+    padding: 20px; margin-bottom: 20px;
+    border: 1px solid #334155;
+  }
+  .config label { display: block; font-size: 0.82rem; color: #94a3b8; margin-bottom: 6px; }
+  .config input {
+    width: 100%; padding: 10px 14px; margin-bottom: 14px;
+    background: #0f172a; border: 1px solid #334155;
+    border-radius: 8px; color: #e2e8f0; font-size: 0.9rem;
+    outline: none; transition: border-color .2s;
+  }
+  .config input:focus { border-color: #3b82f6; }
+  .config input::placeholder { color: #475569; }
+  .config-row { display: flex; gap: 12px; }
+  .config-row > div { flex: 1; }
+  .btn-save {
+    width: 100%; padding: 10px; background: #3b82f6;
+    color: #fff; border: none; border-radius: 8px;
+    font-size: 0.9rem; cursor: pointer; font-weight: 600;
+    transition: background .2s;
+  }
+  .btn-save:hover { background: #2563eb; }
+
+  /* Area drag & drop */
+  .dropzone {
+    border: 2px dashed #475569; border-radius: 12px;
+    padding: 48px 24px; text-align: center;
+    cursor: pointer; transition: all .25s;
+    background: #1e293b; margin-bottom: 20px;
+    position: relative; overflow: hidden;
+  }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: #3b82f6; background: #1e293b;
+    box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+  }
+  .dropzone.dragover { transform: scale(1.01); }
+  .dropzone .icon { font-size: 2.5rem; margin-bottom: 12px; display: block; }
+  .dropzone p { color: #94a3b8; font-size: 0.9rem; }
+  .dropzone strong { color: #3b82f6; cursor: pointer; }
+  .dropzone input[type=file] { display: none; }
+
+  /* Progress bar */
+  .progress-wrap { margin-bottom: 20px; display: none; }
+  .progress-bar {
+    height: 6px; background: #334155; border-radius: 3px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: #3b82f6; border-radius: 3px;
+    width: 0%; transition: width .3s ease;
+  }
+  .progress-text { font-size: 0.8rem; color: #94a3b8; margin-top: 6px; text-align: center; }
+
+  /* Kartu hasil */
+  .results { display: none; }
+  .result-card {
+    background: #1e293b; border-radius: 12px;
+    padding: 16px; margin-bottom: 12px;
+    border: 1px solid #334155;
+    display: flex; gap: 14px; align-items: center;
+    animation: fadeIn .3s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } }
+  .result-card img {
+    width: 64px; height: 64px; object-fit: cover;
+    border-radius: 8px; background: #0f172a; flex-shrink: 0;
+  }
+  .result-info { flex: 1; min-width: 0; }
+  .result-name {
+    font-size: 0.85rem; color: #cbd5e1; margin-bottom: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .result-url {
+    font-size: 0.78rem; color: #64748b; word-break: break-all;
+    line-height: 1.4; max-height: 2.8em; overflow: hidden;
+  }
+  .copy-btn {
+    flex-shrink: 0; padding: 8px 16px; background: #3b82f6;
+    color: #fff; border: none; border-radius: 8px;
+    font-size: 0.8rem; cursor: pointer; font-weight: 600;
+    transition: all .2s; white-space: nowrap;
+  }
+  .copy-btn:hover { background: #2563eb; }
+  .copy-btn.copied { background: #22c55e; }
+
+  /* Toast notifikasi */
+  .toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
+    background: #1e293b; color: #e2e8f0; padding: 12px 24px;
+    border-radius: 10px; font-size: 0.85rem; border: 1px solid #334155;
+    opacity: 0; transition: all .35s ease; z-index: 999;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { border-color: #ef4444; }
+  .toast.success { border-color: #22c55e; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🖼️ Gambar ke CDN URL</h1>
+  <p class="subtitle">Upload gambar ke GitHub, otomatis dapat link CDN jsDelivr</p>
+
+  <!-- Area konfigurasi -->
+  <div class="config" id="configPanel">
+    <div class="config-row">
+      <div>
+        <label>GitHub Token</label>
+        <input type="password" id="inputToken" placeholder="ghp_xxxxxxxxxxxx">
+      </div>
+    </div>
+    <div class="config-row">
+      <div>
+        <label>Username</label>
+        <input type="text" id="inputOwner" placeholder="username-kamu">
+      </div>
+      <div>
+        <label>Nama Repo</label>
+        <input type="text" id="inputRepo" placeholder="my-images">
+      </div>
+    </div>
+    <div class="config-row">
+      <div>
+        <label>Branch</label>
+        <input type="text" id="inputBranch" value="main" placeholder="main">
+      </div>
+      <div>
+        <label>Subfolder (opsional)</label>
+        <input type="text" id="inputDir" placeholder="images">
+      </div>
+    </div>
+    <button class="btn-save" id="btnSaveConfig">Simpan Konfigurasi</button>
+  </div>
+
+  <!-- Area drag & drop -->
+  <div class="dropzone" id="dropzone">
+    <span class="icon">📁</span>
+    <p>Drag & drop gambar ke sini, atau <strong id="btnPickFile">klik buat pilih file</strong></p>
+    <p style="font-size:.78rem;color:#475569;margin-top:8px">Support JPG / PNG / GIF / WebP / SVG</p>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <p class="progress-text" id="progressText">Mengunggah…</p>
+  </div>
+
+  <!-- List hasil -->
+  <div class="results" id="results"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ========== Ambil elemen DOM ==========
+  const $ = (s) => document.querySelector(s);
+  const inputToken  = $('#inputToken');
+  const inputOwner  = $('#inputOwner');
+  const inputRepo   = $('#inputRepo');
+  const inputBranch = $('#inputBranch');
+  const inputDir    = $('#inputDir');
+  const configPanel = $('#configPanel');
+  const dropzone    = $('#dropzone');
+  const fileInput   = $('#fileInput');
+  const progressWrap= $('#progressWrap');
+  const progressFill= $('#progressFill');
+  const progressText= $('#progressText');
+  const results     = $('#results');
+  const toast       = $('#toast');
+
+  const STORAGE_KEY = 'gh_img_cdn_config';
+
+  // ========== Baca / tulis konfigurasi ==========
+  function loadConfig () {
+    try {
+      const cfg = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      if (cfg.token)  inputToken.value  = cfg.token;
+      if (cfg.owner)  inputOwner.value  = cfg.owner;
+      if (cfg.repo)   inputRepo.value   = cfg.repo;
+      if (cfg.branch) inputBranch.value = cfg.branch;
+      if (cfg.dir)    inputDir.value    = cfg.dir;
+    } catch (_) {}
+  }
+
+  function saveConfig () {
+    const cfg = {
+      token:  inputToken.value.trim(),
+      owner:  inputOwner.value.trim(),
+      repo:   inputRepo.value.trim(),
+      branch: inputBranch.value.trim() || 'main',
+      dir:    inputDir.value.trim().replace(/^\/+|\/+$/g, '')
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+  }
+
+  function getConfig () {
+    return {
+      token:  inputToken.value.trim(),
+      owner:  inputOwner.value.trim(),
+      repo:   inputRepo.value.trim(),
+      branch: inputBranch.value.trim() || 'main',
+      dir:    inputDir.value.trim().replace(/^\/+|\/+$/g, '')
+    };
+  }
+
+  function validateConfig (cfg) {
+    if (!cfg.token)  return 'Token GitHub belum diisi';
+    if (!cfg.owner)  return 'Username belum diisi';
+    if (!cfg.repo)   return 'Nama repo belum diisi';
+    return null;
+  }
+
+  $('#btnSaveConfig').addEventListener('click', () => {
+    saveConfig();
+    showToast('Konfigurasi tersimpan', 'success');
+  });
+
+  // ========== Toast ==========
+  let toastTimer;
+  function showToast (msg, type) {
+    clearTimeout(toastTimer);
+    toast.textContent = msg;
+    toast.className = 'toast show ' + (type || '');
+    toastTimer = setTimeout(() => { toast.className = 'toast ' + (type || ''); }, 2600);
+  }
+
+  // ========== Event drag & drop ==========
+  dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+  });
+  dropzone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+  });
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length) handleFiles(files);
+    else showToast('Masukkan file gambar ya', 'error');
+  });
+
+  // Klik buat pilih file
+  $('#btnPickFile').addEventListener('click', (e) => {
+    e.stopPropagation();
+    fileInput.click();
+  });
+  dropzone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) handleFiles(Array.from(fileInput.files));
+    fileInput.value = '';
+  });
+
+  // Upload via paste (Ctrl+V)
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files = [];
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const f = item.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length) handleFiles(files);
+  });
+
+  // ========== Logika upload inti ==========
+  function fileToBase64 (file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // reader.result formatnya: data:image/png;base64,xxxxx
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = () => reject(new Error('Gagal baca file'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function buildFileName (originalName) {
+    const ext = originalName.split('.').pop().toLowerCase();
+    const ts  = Date.now();
+    const rand = Math.random().toString(36).slice(2, 8);
+    return `${ts}_${rand}.${ext}`;
+  }
+
+  async function uploadToGitHub (cfg, file, base64Content, onProgress) {
+    const fileName = buildFileName(file.name);
+    const path = cfg.dir ? `${cfg.dir}/${fileName}` : fileName;
+    const apiUrl = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path}`;
+
+    onProgress(30);
+
+    const res = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${cfg.token}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: `upload: ${fileName}`,
+        content: base64Content,
+        branch: cfg.branch
+      })
+    });
+
+    onProgress(80);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `Gagal upload (HTTP ${res.status})`);
+    }
+
+    const data = await res.json();
+    // Pakai commit sha buat lock versi, biar gak kena masalah cache
+    const sha = data.commit?.sha || cfg.branch;
+
+    // Link CDN jsDelivr
+    const cdnUrl = `https://cdn.jsdelivr.net/gh/${cfg.owner}/${cfg.repo}@${sha}/${path}`;
+
+    onProgress(100);
+    return { cdnUrl, fileName, path };
+  }
+
+  async function handleFiles (files) {
+    const cfg = getConfig();
+    const err = validateConfig(cfg);
+    if (err) { showToast(err, 'error'); return; }
+
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (!imageFiles.length) { showToast('Gak ada file gambar yang valid', 'error'); return; }
+
+    progressWrap.style.display = 'block';
+    results.style.display = 'none';
+    results.innerHTML = '';
+
+    const total = imageFiles.length;
+    let done = 0;
+
+    for (const file of imageFiles) {
+      try {
+        setProgress(Math.round((done / total) * 100), `Memproses ${file.name}…`);
+
+        const base64 = await fileToBase64(file);
+
+        const result = await uploadToGitHub(cfg, file, base64, (pct) => {
+          const overall = Math.round(((done + pct / 100) / total) * 100);
+          setProgress(overall, `Mengunggah ${file.name}…`);
+        });
+
+        renderResult(result, file);
+
+      } catch (e) {
+        renderError(file.name, e.message);
+      }
+      done++;
+    }
+
+    setProgress(100, `Selesai · ${total} file`);
+
+    setTimeout(() => {
+      progressWrap.style.display = 'none';
+      setProgress(0, '');
+    }, 800);
+
+    results.style.display = 'block';
+    showToast(`Berhasil proses ${done} file`, 'success');
+  }
+
+  function setProgress (pct, text) {
+    progressFill.style.width = pct + '%';
+    if (text) progressText.textContent = text;
+  }
+
+  // ========== Render hasil ==========
+  function renderResult (result, originalFile) {
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.innerHTML = `
+      <img src="${result.cdnUrl}" alt="" loading="lazy" onerror="this.style.display='none'">
+      <div class="result-info">
+        <div class="result-name">${escapeHtml(originalFile.name)}</div>
+        <div class="result-url">${escapeHtml(result.cdnUrl)}</div>
+      </div>
+      <button class="copy-btn">Copy</button>
+    `;
+    card.querySelector('.copy-btn').addEventListener('click', function () {
+      copyText(result.cdnUrl, this);
+    });
+    results.appendChild(card);
+  }
+
+  function renderError (fileName, msg) {
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.style.borderColor = '#ef4444';
+    card.innerHTML = `
+      <div style="width:64px;height:64px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;background:#0f172a;border-radius:8px;flex-shrink:0">❌</div>
+      <div class="result-info">
+        <div class="result-name">${escapeHtml(fileName)}</div>
+        <div class="result-url" style="color:#ef4444">${escapeHtml(msg)}</div>
+      </div>
+    `;
+    results.appendChild(card);
+  }
+
+  function escapeHtml (str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  // ========== Copy ke clipboard ==========
+  async function copyText (text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (_) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    btn.textContent = 'Tersalin';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1600);
+    showToast('Link udah dicopy', 'success');
+  }
+
+  // ========== Init ==========
+  loadConfig();
+
+  // Kalau token udah ada, sembunyikan panel config
+  if (inputToken.value) {
+    configPanel.style.display = 'none';
+    const toggle = document.createElement('p');
+    toggle.style.cssText = 'text-align:right;font-size:.78rem;color:#475569;margin-bottom:12px;cursor:pointer;';
+    toggle.textContent = '⚙️ Ubah konfigurasi';
+    toggle.addEventListener('click', () => {
+      configPanel.style.display = configPanel.style.display === 'none' ? 'block' : 'none';
+    });
+    configPanel.parentNode.insertBefore(toggle, configPanel);
+  }
+
+})();
+</script>
+</body>
+</html>
